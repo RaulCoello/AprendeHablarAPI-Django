@@ -13,5 +13,12 @@ urlpatterns = [
 	path('api/questions/<int:id>/',views.Questions),
 
 	# questions games
-	path('api/games/<int:id>/questions/',views.GamesQuestions)
+	path('api/games/<int:id>/questions/',views.GamesQuestions),
+
+	#Only Answers 
+	path('api/answers/',views.Answers),
+	path('api/answers/<int:id>/',views.Answers),
+
+	# Answers Question
+	path('api/answers/<int:id>/question/',views.QuestionAnswers)
 ]

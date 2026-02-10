@@ -29,7 +29,7 @@ class Answer(models.Model):
 	answer = models.CharField(max_length=150)
 	color = models.CharField(max_length=50)
 	is_correct = models.BooleanField(default=False)
-	sound = models.TextField(blank=True)
+	sound = models.FileField(upload_to='sounds/', blank=True, null=True)
 	number_answer = models.IntegerField()
 	answer_image = models.ImageField(upload_to='images/', blank=True, null=True)
 	question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='answers')

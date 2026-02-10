@@ -20,5 +20,11 @@ urlpatterns = [
 	path('api/answers/<int:id>/',views.Answers),
 
 	# Answers Question
-	path('api/answers/<int:id>/question/',views.QuestionAnswers)
+	path('api/answers/<int:id>/question/',views.QuestionAnswers),
+
+	#FaceDetection
+	path('api/face/',views.DetectFaces),
+
+	#CreateAnswerFromTempFace
+	path('api/faceanswer/',views.CreateAnswerFromTempFace)
 ]

@@ -2,7 +2,13 @@ from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from .models import Game,Question,Answer
 from django.http import JsonResponse
+from django.core.files.storage import default_storage
+from .utils.face_detector import detectar_rostros
+from django.conf import settings
 import json
+import os
+import shutil
+
 
 # Create your views here.
 
@@ -279,3 +285,98 @@ def QuestionAnswers(request, id=None):
 	if request.method == 'GET' and id is not None:
 		answers_question = list(Answer.objects.filter(question_id=id).select_related('question','answers').values())
 		return JsonResponse(answers_question, safe = False)
+
+
+# Endpoint para el detector de rostros skere modo diablo
+@csrf_exempt
+def DetectFaces(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    image = request.FILES.get("image")
+    if not image:
+        return JsonResponse({"error": "Imagen requerida"}, status=400)
+
+    # Guardar imagen original temporal
+    temp_image_path = default_storage.save(
+        f"tmp/originals/{image.name}", image
+    )
+
+    abs_image_path = os.path.join(settings.MEDIA_ROOT, temp_image_path)
+
+    # Carpeta para rostros
+    faces_dir = os.path.join(settings.MEDIA_ROOT, "tmp/faces")
+
+    # Detectar rostros
+    faces = detectar_rostros(
+        image_path=abs_image_path,
+        output_dir=faces_dir,
+        padding=0.25
+    )
+
+    # Construir URLs públicas
+    faces_urls = [
+    	f"tmp/faces/{f}"
+    	for f in faces
+	]
+
+
+    return JsonResponse({
+        "faces_count": len(faces_urls),
+        "faces": faces_urls
+    })
+
+
+
+
+ #View para guardar las respuestas de las faces detectadas
+@csrf_exempt
+def CreateAnswerFromTempFace(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    text = request.POST.get("text", "")
+    color = request.POST.get("color", "")
+    is_correct = request.POST.get('correct', '')
+    number_answer = request.POST.get("number_answer", 1)
+    question_id = request.POST.get("question_id")
+    image_path = request.POST.get("image_path")  # ejemplo: tmp/faces/abc.jpg
+
+    if not image_path:
+        return JsonResponse({"error": "image_path requerido"}, status=400)
+
+    #  Validación básica
+    if not image_path.startswith("tmp/faces/"):
+        return JsonResponse({"error": "Ruta inválida"}, status=400)
+
+    # Rutas absolutas
+    temp_abs_path = os.path.join(settings.MEDIA_ROOT, image_path)
+
+    if not os.path.exists(temp_abs_path):
+        return JsonResponse({"error": "Imagen no encontrada"}, status=404)
+
+    # Crear nombre definitivo
+    filename = os.path.basename(image_path)
+    final_rel_path = f"images/{filename}"
+    final_abs_path = os.path.join(settings.MEDIA_ROOT, final_rel_path)
+
+    # Mover archivo tmp → images
+    os.makedirs(os.path.dirname(final_abs_path), exist_ok=True)
+    shutil.move(temp_abs_path, final_abs_path)
+
+    # Crear Answer usando la ruta relativa
+    a = Answer.objects.create(
+        answer=text,
+        color=color,
+        is_correct=is_correct,
+        number_answer=number_answer,
+        answer_image=final_rel_path,
+        question_id=question_id
+    )
+
+    return JsonResponse({
+        "id": a.id,
+        "answer": a.answer,
+        "image": a.answer_image.url if a.answer_image else None
+    })
+

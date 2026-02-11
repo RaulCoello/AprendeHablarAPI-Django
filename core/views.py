@@ -4,6 +4,7 @@ from .models import Game,Question,Answer
 from django.http import JsonResponse
 from django.core.files.storage import default_storage
 from .utils.face_detector import detectar_rostros
+from .utils.tts_service import generate_game_tts
 from django.conf import settings
 import json
 import os
@@ -31,7 +32,8 @@ def Games(request, id=None):
 				'id':g.id,
 				'title':g.title,
 				'color':g.color,
-				'image':g.image
+				'image':g.image.url if g.image else None,
+				'titulo_tts': g.titulo_tts.url if g.titulo_tts else None
 			}
 			return JsonResponse(data)
 		except Game.DoesNotExist:
@@ -43,14 +45,41 @@ def Games(request, id=None):
 		title = request.POST.get('title')
 		color = request.POST.get('color', '')
 		image = request.FILES.get('image')  # viene de FormData
-
+		titulo_tts = ""
 		#data = json.loads(request.body)
-		
+
+		# generar tts si no viene vacio el texto
+		if title.strip():
+			#crear carpeta para almacenar temporalmente el tss_game
+			tss_dir = os.path.join(settings.MEDIA_ROOT, "tmp/tss/game")
+			ruta_tts = generate_game_tts(f"Vas a jugar el juego {title}", tss_dir, "game")
+
+			# Rutas absolutas
+			temp_abs_path = os.path.join(settings.MEDIA_ROOT, ruta_tts)
+
+			# Crear nombre definitivo
+			filename = os.path.basename(ruta_tts)
+			final_rel_path = f"tss/game/{filename}"
+			final_abs_path = os.path.join(settings.MEDIA_ROOT, final_rel_path)
+
+			# Mover archivo tmp → tss
+			os.makedirs(os.path.dirname(final_abs_path), exist_ok=True)
+			shutil.move(temp_abs_path, final_abs_path)
+
+			#print(final_rel_path) --> este de aqui guardar en el objeto
+			#g.titulo_tts = final_rel_path 
+
+			titulo_tts = final_rel_path 
+
+
 		g = Game.objects.create(
 			title = title,
 			color = color,
-			image = image
+			image = image,
+			titulo_tts = titulo_tts
 			)
+
+
 		return JsonResponse({'id':g.id,'title':g.title,'image': g.image.url if g.image else None})	 
 
 
@@ -63,7 +92,9 @@ def Games(request, id=None):
 			title = request.POST.get('title', g.title)
 			color = request.POST.get('color', g.color)
 			image = request.FILES.get('image')
-
+			
+			tss_anterior = g.titulo_tts.url if g.titulo_tts else None
+			
 			g.title = title
 			g.color = color
 
@@ -73,7 +104,48 @@ def Games(request, id=None):
 					#g.image.delete(save=False)
 				g.image = image
 
+			#crear el tts
+			if title.strip():
+
+				#crear carpeta para almacenar temporalmente el tss_game
+				tss_dir = os.path.join(settings.MEDIA_ROOT, "tmp/tss/game")
+
+				ruta_tts = generate_game_tts(f"Vas a jugar el juego {title}", tss_dir, "game")
+				#print(f"Guardado en: {ruta_tts}") 
+
+				# ahora mover el archivo de esa ruta ajaj skere mod diablo
+				# ejemplo: tmp/tss/game/56f75474f96e4ed69bc3985d68c89000.wav
+
+    			# Rutas absolutas
+				temp_abs_path = os.path.join(settings.MEDIA_ROOT, ruta_tts)
+
+    			# Crear nombre definitivo
+				filename = os.path.basename(ruta_tts)
+				final_rel_path = f"tss/game/{filename}"
+				final_abs_path = os.path.join(settings.MEDIA_ROOT, final_rel_path)
+
+    			# Mover archivo tmp → tss
+				os.makedirs(os.path.dirname(final_abs_path), exist_ok=True)
+				shutil.move(temp_abs_path, final_abs_path)
+
+			
+				#print(final_rel_path) --> este de aqui guardar en el objeto
+				g.titulo_tts = final_rel_path 
+				
+				# eliminar el anterior jajaj skere modo diablito
+				# si existe viene en esta forma: /media/tss/game/fcb7bcab4f7442feb670ac0833698d3c.wav
+				
+				if tss_anterior:
+					ruta_delete = tss_anterior.replace("/media/", "")
+					delete_abs_path = os.path.join(settings.MEDIA_ROOT, ruta_delete)
+
+					if os.path.exists(delete_abs_path):
+						os.remove(delete_abs_path)
+
+
+
 			g.save()
+
 
 			return JsonResponse({'mensaje':'Game actualizado'})
 
@@ -115,7 +187,10 @@ def Questions(request, id=None):
 				'resource':q.resource.url if q.resource else None,
 				'type_question':q.type_question,
 				'type_resource':q.type_resource,
-				'number_question':q.number_question
+				'number_question':q.number_question,
+				'title_tts':q.title_tts.url if q.title_tts else None,
+				'indication_tts':q.indication_tts.url if q.indication_tts else None
+
 			}
 			return JsonResponse(data)
 		except Question.DoesNotExist:
@@ -130,6 +205,43 @@ def Questions(request, id=None):
 		number_question = request.POST.get('number_question', '')
 		game_id = request.POST.get('game_id', '')
 		image = request.FILES.get('image')  # viene de FormData
+		title_tts= ""
+		indication_tts =""
+		
+
+		# aqui agregar el tss cuando se crea ajajaj skere
+		#crear el tss del title
+		if title.strip():
+				
+			tss_dir = os.path.join(settings.MEDIA_ROOT, "tmp/tss/question")
+			ruta_tts = generate_game_tts(f"{title}", tss_dir, "question")
+				
+			temp_abs_path = os.path.join(settings.MEDIA_ROOT, ruta_tts)
+			filename = os.path.basename(ruta_tts)
+				
+			final_rel_path = f"tss/question/{filename}"
+			final_abs_path = os.path.join(settings.MEDIA_ROOT, final_rel_path)
+				
+			os.makedirs(os.path.dirname(final_abs_path), exist_ok=True)
+			shutil.move(temp_abs_path, final_abs_path)
+				
+			title_tts = final_rel_path 
+
+		#crear el tss de la indicacion
+		if indication.strip():
+			tss_dir = os.path.join(settings.MEDIA_ROOT, "tmp/tss/question")
+			ruta_tts = generate_game_tts(f"{indication}", tss_dir, "question")
+				
+			temp_abs_path = os.path.join(settings.MEDIA_ROOT, ruta_tts)
+			filename = os.path.basename(ruta_tts)
+				
+			final_rel_path = f"tss/question/{filename}"
+			final_abs_path = os.path.join(settings.MEDIA_ROOT, final_rel_path)
+				
+			os.makedirs(os.path.dirname(final_abs_path), exist_ok=True)
+			shutil.move(temp_abs_path, final_abs_path)
+				
+			indication_tts = final_rel_path 
 
 		
 		g = Question.objects.create(
@@ -139,8 +251,15 @@ def Questions(request, id=None):
 			type_question = type_question,
 			type_resource = type_resource,
 			number_question = number_question,
-			game_id =game_id 
+			game_id =game_id,
+			title_tts = title_tts,
+			indication_tts = indication_tts
 			)
+				
+
+
+
+
 		return JsonResponse({'id':g.id,'title':g.title,'image': g.resource.url if g.resource else None})	 
 
 	# Put => POST logico para actualizar 
@@ -157,6 +276,9 @@ def Questions(request, id=None):
 			game_id = request.POST.get('game_id', g.game_id)
 			image = request.FILES.get('image') # viene de FormData
 
+			tss_anterior = g.title_tts.url if g.title_tts else None
+			tss_anterior_indicacion = g.indication_tts.url if g.indication_tts else None
+
 			# reemplazar valores del registro
 			g.title = title
 			g.indication = indication
@@ -170,6 +292,57 @@ def Questions(request, id=None):
 				#if g.image:
 					#g.image.delete(save=False)
 				g.resource = image
+
+
+			#crear el tss del title
+			if title.strip():
+				
+				tss_dir = os.path.join(settings.MEDIA_ROOT, "tmp/tss/question")
+				ruta_tts = generate_game_tts(f"{title}", tss_dir, "question")
+				
+				temp_abs_path = os.path.join(settings.MEDIA_ROOT, ruta_tts)
+				filename = os.path.basename(ruta_tts)
+				
+				final_rel_path = f"tss/question/{filename}"
+				final_abs_path = os.path.join(settings.MEDIA_ROOT, final_rel_path)
+				
+				os.makedirs(os.path.dirname(final_abs_path), exist_ok=True)
+				shutil.move(temp_abs_path, final_abs_path)
+				
+				g.title_tts = final_rel_path 
+				
+				if tss_anterior:
+					ruta_delete = tss_anterior.replace("/media/", "")
+					delete_abs_path = os.path.join(settings.MEDIA_ROOT, ruta_delete)
+				
+					if os.path.exists(delete_abs_path):
+						os.remove(delete_abs_path)
+
+			
+			#crear el tss de la indicacion
+			if indication.strip():
+				tss_dir = os.path.join(settings.MEDIA_ROOT, "tmp/tss/question")
+				ruta_tts = generate_game_tts(f"{indication}", tss_dir, "question")
+				
+				temp_abs_path = os.path.join(settings.MEDIA_ROOT, ruta_tts)
+				filename = os.path.basename(ruta_tts)
+				
+				final_rel_path = f"tss/question/{filename}"
+				final_abs_path = os.path.join(settings.MEDIA_ROOT, final_rel_path)
+				
+				os.makedirs(os.path.dirname(final_abs_path), exist_ok=True)
+				shutil.move(temp_abs_path, final_abs_path)
+				
+				g.indication_tts = final_rel_path 
+				
+				if tss_anterior_indicacion:
+					ruta_delete = tss_anterior_indicacion.replace("/media/", "")
+					delete_abs_path = os.path.join(settings.MEDIA_ROOT, ruta_delete)
+				
+					if os.path.exists(delete_abs_path):
+						os.remove(delete_abs_path)
+
+
 
 			g.save()
 
@@ -212,6 +385,26 @@ def Answers(request, id=None):
 		answers = list(Answer.objects.values())
 		return JsonResponse(answers, safe=False)
 
+	# Get con el id de la answer
+	if request.method == 'GET' and id is not None:
+		try:
+			q = Answer.objects.get(id=id)
+			data = {
+				'id':q.id,
+				'answer':q.answer,
+				'color':q.color,
+				'is_correct':q.is_correct,
+				'sound':q.sound.url if q.sound else None,
+				'number_answer':q.number_answer,
+				'answer_image':q.answer_image.url if q.answer_image else None,
+				'question_id':q.question_id,
+				'answer_tts':q.answer_tts.url if q.answer_tts else None
+			}
+			return JsonResponse(data)
+		except Question.DoesNotExist:
+			return JsonResponse({'error':'Answer no existe id'}, status= 404)
+
+
 
 	#Post para crear answers
 	if request.method == 'POST' and id is None:
@@ -222,6 +415,37 @@ def Answers(request, id=None):
 		number_answer = request.POST.get('number_answer', 1)
 		answer_image = request.FILES.get('answer_image', '')
 		question_id = request.POST.get('question_id')
+		answer_tts = ""
+
+
+		# aqui crear el tss
+		if answer.strip():
+
+			#crear carpeta para almacenar temporalmente el tss_game
+			tss_dir = os.path.join(settings.MEDIA_ROOT, "tmp/tss/answer")
+
+			ruta_tts = generate_game_tts(f"{answer}", tss_dir, "answer")
+			
+
+			# ahora mover el archivo de esa ruta ajaj skere mod diablo
+			# ejemplo: tmp/tss/game/56f75474f96e4ed69bc3985d68c89000.wav
+
+    		# Rutas absolutas
+			temp_abs_path = os.path.join(settings.MEDIA_ROOT, ruta_tts)
+
+    		# Crear nombre definitivo
+			filename = os.path.basename(ruta_tts)
+			final_rel_path = f"tss/answer/{filename}"
+			final_abs_path = os.path.join(settings.MEDIA_ROOT, final_rel_path)
+
+    		# Mover archivo tmp → tss
+			os.makedirs(os.path.dirname(final_abs_path), exist_ok=True)
+			shutil.move(temp_abs_path, final_abs_path)
+
+			
+			#print(final_rel_path) --> este de aqui guardar en el objeto
+			answer_tts = final_rel_path 
+
 
 		a = Answer.objects.create(
 			answer = answer,
@@ -230,7 +454,8 @@ def Answers(request, id=None):
 			sound = sound,
 			number_answer = number_answer,
 			answer_image =answer_image,
-			question_id= question_id
+			question_id= question_id,
+			answer_tts = answer_tts
 			)
 		return JsonResponse({'id':a.id,'answer':a.answer,'image': a.answer_image.url if a.answer_image else None})	 
 
@@ -249,6 +474,8 @@ def Answers(request, id=None):
 			answer_image = request.FILES.get('answer_image','')
 			question_id = request.POST.get('question_id',a.question_id)
 
+			tss_anterior= a.answer_tts.url if a.answer_tts else None
+
 			# Reemplazar valores
 
 			a.answer = answer
@@ -262,6 +489,49 @@ def Answers(request, id=None):
 
 			if answer_image:
 				a.answer_image = answer_image
+
+
+			# aqui agregar el tts
+			# answer_tts
+            #crear el tts
+			if answer.strip():
+
+				#crear carpeta para almacenar temporalmente el tss_game
+				tss_dir = os.path.join(settings.MEDIA_ROOT, "tmp/tss/answer")
+
+				ruta_tts = generate_game_tts(f"{answer}", tss_dir, "answer")
+				#print(f"Guardado en: {ruta_tts}") 
+
+				# ahora mover el archivo de esa ruta ajaj skere mod diablo
+				# ejemplo: tmp/tss/game/56f75474f96e4ed69bc3985d68c89000.wav
+
+    			# Rutas absolutas
+				temp_abs_path = os.path.join(settings.MEDIA_ROOT, ruta_tts)
+
+    			# Crear nombre definitivo
+				filename = os.path.basename(ruta_tts)
+				final_rel_path = f"tss/answer/{filename}"
+				final_abs_path = os.path.join(settings.MEDIA_ROOT, final_rel_path)
+
+    			# Mover archivo tmp → tss
+				os.makedirs(os.path.dirname(final_abs_path), exist_ok=True)
+				shutil.move(temp_abs_path, final_abs_path)
+
+			
+				#print(final_rel_path) --> este de aqui guardar en el objeto
+				a.answer_tts = final_rel_path 
+				
+				# eliminar el anterior jajaj skere modo diablito
+				# si existe viene en esta forma: /media/tss/game/fcb7bcab4f7442feb670ac0833698d3c.wav
+				
+				if tss_anterior:
+					ruta_delete = tss_anterior.replace("/media/", "")
+					delete_abs_path = os.path.join(settings.MEDIA_ROOT, ruta_delete)
+
+					if os.path.exists(delete_abs_path):
+						os.remove(delete_abs_path)
+
+
 
 			a.save()
 
